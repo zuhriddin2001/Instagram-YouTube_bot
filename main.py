@@ -7,8 +7,11 @@ import requests
 from telebot import types
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from dotenv import load_dotenv
 
-TOKEN = '7679328919:AAEdvxHjCC5VqzYo0p6zR55y-cBMXRnT7V8'
+# Load environment variables
+load_dotenv()
+TOKEN = os.getenv('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 # Vaqt chegaralari sozlamalari
@@ -33,7 +36,6 @@ if not os.path.exists(DOWNLOAD_DIR):
 # Bot logosi
 BOT_LOGO = "https://example.com/logo.jpg"  # Botingiz uchun logo URL manzili
 
-
 def is_valid_url(url):
     # Agar xabar bir necha qatorlardan iborat bo'lsa, faqat URLni topib olamiz
     if "\n" in url:
@@ -47,7 +49,6 @@ def is_valid_url(url):
         return url.strip()
 
     return False
-
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -86,7 +87,6 @@ def send_welcome(message):
             reply_markup=markup
         )
 
-
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     if call.data == "youtube":
@@ -109,7 +109,6 @@ def handle_callback(call):
     # Tugma bosilgandan so'ng animatsiyani to'xtatish
     bot.answer_callback_query(call.id)
 
-
 @bot.message_handler(commands=['help'])
 def send_help(message):
     help_text = (
@@ -120,7 +119,6 @@ def send_help(message):
         "⚠️ Eslatma: Juda katta hajmdagi videolarni yuklab olish uzoq vaqt talab qilishi mumkin."
     )
     bot.send_message(message.chat.id, help_text)
-
 
 @bot.message_handler(func=lambda message: is_valid_url(message.text) is not False)
 def download_video(message):
@@ -155,103 +153,38 @@ def download_video(message):
             'quiet': True,
             'noplaylist': True,
             'cookiefile': 'cookies.txt',
-            'default_search': 'ytsearch',  # YouTube qidirish funksiyasini yoqish
-            'ignoreerrors': True,  # Ba'zi xatoliklarni e'tiborsiz qoldirish
-            'socket_timeout': 30,  # Soket vaqt chegarasi
-            'retries': 10,  # Qayta urinishlar soni
-            'fragment_retries': 10,  # Fragment qayta urinishlari
-            'skip_download_archive': True,  # Arxivni o'tkazib yuborish
-            'external_downloader_args': ['-timeout', '30'],  # Tashqi yuklovchi uchun parametrlar
+            'default_search': 'ytsearch',
+            'ignoreerrors': True,
+            'socket_timeout': 30,
+            'retries': 10,
+            'fragment_retries': 10,
+            'skip_download_archive': True,
+            'external_downloader_args': ['-timeout', '30'],
         }
 
         # Video ma'lumotlarini olish va xatolarni qayta ishlash
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # Debug uchun URL haqida ma'lumot
-                print(f"Yuklanmoqda: {url}")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Debug uchun URL haqida ma'lumot
+            print(f"Yuklanmoqda: {url}")
 
-                # Video ma'lumotlarini olish
-                info = ydl.extract_info(url, download=False)
+            # Video ma'lumotlarini olish
+            info = ydl.extract_info(url, download=False)
 
-                if not info:
-                    raise Exception("Video ma'lumotlarini olishda xatolik")
+            if not info:
+                raise Exception("Video ma'lumotlarini olishda xatolik")
 
-                # Xabarni yangilash
-                bot.edit_message_text(
-                    f"⬇️ {platform} dan \"{info.get('title', 'Video')}\" yuklanmoqda...",
-                    chat_id=chat_id,
-                    message_id=status_message.message_id
-                )
-
-                # Videoni yuklab olish - qayta urinish mexanizmi bilan
-                max_attempts = 3
-                for attempt in range(max_attempts):
-                    try:
-                        ydl.download([url])
-                        file_path = ydl.prepare_filename(info)
-                        if os.path.exists(file_path):
-                            break  # Muvaffaqiyatli yuklab olindi
-                    except Exception as download_error:
-                        print(f"Urinish {attempt + 1}/{max_attempts} xatolik: {download_error}")
-                        if attempt == max_attempts - 1:  # Oxirgi urinish
-                            raise  # Xatolikni qayta ko'tarish
-                        bot.edit_message_text(
-                            f"⚠️ Yuklab olishda xatolik. Qayta urinilmoqda ({attempt + 2}/{max_attempts})...",
-                            chat_id=chat_id,
-                            message_id=status_message.message_id
-                        )
-                        time.sleep(2)  # Qayta urinishdan oldin kutish
-
-        except Exception as e:
-            print(f"Yuklab olishda xatolik: {str(e)}")
-
-            # Xabar berish - muammoni tushunarli qilib tushuntirish
-            error_message = str(e)
-            if "Connection aborted" in error_message or "timed out" in error_message:
-                error_text = "⚠️ Internet aloqasi sekin yoki beqaror. Iltimos, keyinroq qayta urinib ko'ring."
-            elif "not a valid URL" in error_message:
-                error_text = "❌ Yaroqsiz havola. Iltimos, to'g'ri YouTube, Instagram yoki TikTok havolasini yuboring."
-            elif "This video is not available" in error_message:
-                error_text = "⚠️ Bu video hozirda mavjud emas yoki cheklangan."
-            else:
-                error_text = f"❌ Videoni yuklab olishda xatolik yuz berdi. Iltimos, boshqa havola bilan urinib ko'ring."
-
+            # Xabarni yangilash
             bot.edit_message_text(
-                error_text,
+                f"⬇️ {platform} dan \"{info.get('title', 'Video')}\" yuklanmoqda...",
                 chat_id=chat_id,
                 message_id=status_message.message_id
             )
 
-            # Xatolikdan so'ng chiqib ketish
-            return
+            # Videoni yuklab olish
+            ydl.download([url])
+            file_path = ydl.prepare_filename(info)
 
-        # Fayl mavjudligini tekshirish - agar mavjud bo'lmasa boshqa usulda urinib ko'rish
-        if not os.path.exists(file_path):
-            try:
-                # Alternative parameter bilan qayta urinish
-                alternative_opts = ydl_opts.copy()
-                alternative_opts['format'] = 'best[height<=720]'  # Sifatni kamaytirish
-
-                bot.edit_message_text(
-                    "🔄 Asosiy usul bilan yuklab olib bo'lmadi. Alternativ usul bilan urinib ko'rilmoqda...",
-                    chat_id=chat_id,
-                    message_id=status_message.message_id
-                )
-
-                with yt_dlp.YoutubeDL(alternative_opts) as alt_ydl:
-                    alt_info = alt_ydl.extract_info(url, download=True)
-                    file_path = alt_ydl.prepare_filename(alt_info)
-                    info = alt_info  # Ma'lumotni yangilash
-            except Exception as alt_error:
-                print(f"Alternativ usul bilan yuklab olishda xatolik: {alt_error}")
-                bot.edit_message_text(
-                    "❌ Videoni yuklab olishning iloji bo'lmadi. Boshqa havola bilan urinib ko'ring.",
-                    chat_id=chat_id,
-                    message_id=status_message.message_id
-                )
-                return
-
-        # Faylni tekshirish
+        # Fayl mavjudligini tekshirish
         if not os.path.exists(file_path):
             raise Exception("Fayl topilmadi")
 
@@ -266,7 +199,6 @@ def download_video(message):
 
         # Video faylni Telegramga yuborish
         with open(file_path, 'rb') as video_file:
-            # Fayl hajmi 50MB dan katta bo'lsa
             if file_size_mb > 50:
                 bot.edit_message_text(
                     f"⚠️ Video hajmi juda katta ({file_size_mb:.1f} MB). "
@@ -275,32 +207,34 @@ def download_video(message):
                     message_id=status_message.message_id
                 )
             else:
-                # Video sarlavhasi
                 caption = f"📹 {info.get('title', 'Video')}\n\n👉 @your_bot_username orqali yuklandi"
-
-                # Videoni yuborish
                 bot.send_video(
                     chat_id,
                     video_file,
                     caption=caption,
                     supports_streaming=True
                 )
-
-                # Xabarni o'chirish
                 bot.delete_message(chat_id, status_message.message_id)
 
         # Yuklab olingan faylni o'chirish
         os.remove(file_path)
 
     except Exception as e:
-        error_message = f"❌ Xatolik yuz berdi: {str(e)}"
-        print(error_message)
+        error_message = str(e)
+        if "Connection aborted" in error_message or "timed out" in error_message:
+            error_text = "⚠️ Internet aloqasi sekin yoki beqaror. Iltimos, keyinroq qayta urinib ko'ring."
+        elif "not a valid URL" in error_message:
+            error_text = "❌ Yaroqsiz havola. Iltimos, to'g'ri YouTube, Instagram yoki TikTok havolasini yuboring."
+        elif "This video is not available" in error_message:
+            error_text = "⚠️ Bu video hozirda mavjud emas yoki cheklangan."
+        else:
+            error_text = "❌ Videoni yuklab olishda xatolik yuz berdi. Iltimos, boshqa havola bilan urinib ko'ring."
+
         bot.edit_message_text(
-            "❌ Videoni yuklab olishda xatolik yuz berdi. Iltimos, boshqa havola bilan urinib ko'ring.",
+            error_text,
             chat_id=chat_id,
             message_id=status_message.message_id
         )
-
 
 @bot.message_handler(func=lambda message: True)
 def unknown(message):
@@ -318,7 +252,6 @@ def unknown(message):
         "🔗 Iltimos, to'g'ri video havolasini yuboring yoki quyidagi tugmalarni bosing:",
         reply_markup=markup
     )
-
 
 if __name__ == "__main__":
     print("🚀 Bot ishga tushdi...")
